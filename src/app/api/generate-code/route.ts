@@ -43,7 +43,6 @@ export async function POST(request: Request) {
       const timeRemainingSeconds = Math.floor(timeRemaining / 1000);
 
       // 7. Gera também o próximo código para preview.
-      const nextTime = now + timeRemaining;
       const nextCode = authenticator.generate(secret);
 
       // 8. Retorna os códigos e informações de timing.
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
         valid: true
       });
 
-    } catch (error) {
+    } catch {
       // Se houver erro na geração, a chave provavelmente é inválida.
       return NextResponse.json(
         { message: 'Chave secreta inválida. Verifique se a chave está correta.' },

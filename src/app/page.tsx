@@ -90,8 +90,9 @@ export default function TwoFactorApp() {
       }
 
       setCodeData(data);
-    } catch (error: any) {
-      setError(error.message || 'Erro ao gerar códigos');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao gerar códigos';
+      setError(errorMessage);
       setCodeData(null);
     } finally {
       setIsGenerating(false);

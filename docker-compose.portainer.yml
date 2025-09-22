@@ -13,8 +13,15 @@ services:
       apk add --no-cache wget curl &&
       echo 'Aguardando código fonte...' &&
       while [ ! -f package.json ]; do sleep 5; done &&
+      echo 'Forçando atualização do git...' &&
+      cd /app && git fetch --all &&
+      git reset --hard origin/main &&
       echo 'Removendo next.config.ts se existir...' &&
       rm -f next.config.ts &&
+      echo 'Limpando cache npm...' &&
+      npm cache clean --force &&
+      echo 'Removendo node_modules para instalação limpa...' &&
+      rm -rf node_modules package-lock.json &&
       echo 'Instalando dependências (incluindo dev)...' &&
       npm install &&
       echo 'Construindo aplicação...' &&

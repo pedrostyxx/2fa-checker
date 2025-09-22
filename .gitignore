@@ -9,7 +9,10 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+.yml
+.docker-compose.advanced.yml
+.docker-compose.portainer.yml
+Dockerfile
 # testing
 /coverage
 

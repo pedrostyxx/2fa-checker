@@ -393,7 +393,7 @@ otpauth://totp/GitHub:pedrostyxx?secret=KP4C2QFTXURDDAIA&issuer=GitHub&algorithm
 - **Codificação**: Base32 padrão RFC 4648
 - **Compatibilidade**: Google Authenticator v5.0+
 
-### �🚀 Instalação e Uso
+### 🚀 Instalação e Uso
 
 #### Pré-requisitos
 - Node.js 18+ 

@@ -10,6 +10,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=80
+      - NODE_OPTIONS=--max-old-space-size=768
+      - NEXT_TELEMETRY_DISABLED=1
     deploy:
       mode: replicated
       replicas: 1
@@ -18,13 +20,13 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=1
-        - traefik.http.routers.app_2fa_checker.rule=Host(`otp.styxx.cloud`)
-        - traefik.http.routers.app_2fa_checker.entrypoints=websecure
-        - traefik.http.routers.app_2fa_checker.priority=1
-        - traefik.http.routers.app_2fa_checker.tls.certresolver=letsencryptresolver
-        - traefik.http.routers.app_2fa_checker.service=app_2fa_checker
-        - traefik.http.services.app_2fa_checker.loadbalancer.server.port=80
-        - traefik.http.services.app_2fa_checker.loadbalancer.passHostHeader=true
+        - traefik.http.routers.app_2fa_checker_simple.rule=Host(`otp.styxx.cloud`)
+        - traefik.http.routers.app_2fa_checker_simple.entrypoints=websecure
+        - traefik.http.routers.app_2fa_checker_simple.priority=1
+        - traefik.http.routers.app_2fa_checker_simple.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.app_2fa_checker_simple.service=app_2fa_checker_simple
+        - traefik.http.services.app_2fa_checker_simple.loadbalancer.server.port=80
+        - traefik.http.services.app_2fa_checker_simple.loadbalancer.passHostHeader=true
       restart_policy:
         condition: on-failure
         delay: 10s

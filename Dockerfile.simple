@@ -1,4 +1,4 @@
-# Dockerfile para 2FA Checker - Versão Simples
+# Dockerfile para 2FA Checker - Versão Robusta
 FROM node:18-alpine
 
 # Instalar dependências do sistema
@@ -7,16 +7,23 @@ RUN apk add --no-cache git
 # Definir diretório de trabalho
 WORKDIR /app
 
+# Configurar variáveis de ambiente para build
+ENV NODE_OPTIONS="--max-old-space-size=768"
+ENV NEXT_TELEMETRY_DISABLED=1
+
 # Clonar o repositório
 RUN git clone https://github.com/pedrostyxx/2fa-checker.git .
 
 # Remover next.config.ts se existir (usar apenas .js)
 RUN rm -f next.config.ts
 
-# Instalar dependências
-RUN npm install
+# Limpar cache npm
+RUN npm cache clean --force
 
-# Fazer build da aplicação
+# Instalar dependências
+RUN npm install --include=dev
+
+# Fazer build da aplicação com configurações otimizadas
 RUN npm run build
 
 # Remover devDependencies para produção
@@ -25,7 +32,7 @@ RUN npm prune --production
 # Expor porta
 EXPOSE 80
 
-# Definir variáveis de ambiente
+# Definir variáveis de ambiente para runtime
 ENV NODE_ENV=production
 ENV PORT=80
 

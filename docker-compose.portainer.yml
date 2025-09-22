@@ -22,8 +22,8 @@ services:
       npm cache clean --force &&
       echo 'Removendo node_modules para instalação limpa...' &&
       rm -rf node_modules package-lock.json &&
-      echo 'Instalando dependências (incluindo dev)...' &&
-      npm install &&
+      echo 'Instalando TODAS as dependências (prod + dev)...' &&
+      npm install --include=dev &&
       echo 'Construindo aplicação...' &&
       npm run build &&
       echo 'Removendo devDependencies para produção...' &&

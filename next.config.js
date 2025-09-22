@@ -27,10 +27,6 @@ const nextConfig = {
     
     return config;
   },
-  // Desabilitar telemetria para reduzir overhead
-  experimental: {
-    instrumentationHook: false,
-  },
 }
 
 module.exports = nextConfig

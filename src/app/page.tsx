@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-type Mode = 'setup' | 'generate';
+type Mode = 'setup' | 'generate' | 'import';
 
 interface CodeData {
   currentCode: string;
@@ -11,6 +11,16 @@ interface CodeData {
   timeRemaining: number;
   timestamp: number;
   valid: boolean;
+}
+
+interface ImportedAccount {
+  name: string;
+  issuer: string;
+  secret: string;
+  otpauthUri: string;
+  algorithm: string;
+  digits: number;
+  type: string;
 }
 
 export default function TwoFactorApp() {
@@ -30,6 +40,12 @@ export default function TwoFactorApp() {
   const [codeData, setCodeData] = useState<CodeData | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+
+  // Estados para modo Import (importar do Google)
+  const [migrationUrl, setMigrationUrl] = useState<string>('');
+  const [importedAccounts, setImportedAccounts] = useState<ImportedAccount[]>([]);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [importError, setImportError] = useState<string>('');
 
   // Função para gerar QR code (modo setup)
   useEffect(() => {
@@ -161,14 +177,63 @@ export default function TwoFactorApp() {
     }
   };
 
+  // Função para importar dados de migração do Google
+  const handleImportMigration = async () => {
+    if (!migrationUrl.trim()) {
+      setImportError('Por favor, insira a URL de migração.');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportError('');
+    setImportedAccounts([]);
+
+    try {
+      const response = await fetch('/api/decode-migration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ migrationUrl: migrationUrl.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setImportError(data.message || 'Erro ao processar dados de migração');
+        return;
+      }
+
+      setImportedAccounts(data.accounts);
+      if (data.accounts.length === 0) {
+        setImportError('Nenhuma conta encontrada nos dados de migração.');
+      }
+
+    } catch (error) {
+      console.error('Erro ao importar:', error);
+      setImportError('Erro ao processar dados de migração. Verifique a URL.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Função para usar uma conta importada para gerar códigos
+  const selectImportedAccount = (account: ImportedAccount) => {
+    setInputSecret(account.secret);
+    setMode('generate');
+  };
+
   // Função para trocar de modo
-  const toggleMode = () => {
-    setMode(mode === 'setup' ? 'generate' : 'setup');
+  const changeMode = (newMode: Mode) => {
+    setMode(newMode);
+    
     // Reset states when switching
     setVerificationResult('');
     setError('');
     setCodeData(null);
     setVerificationCode('');
+    setImportError('');
+    setImportedAccounts([]);
   };
 
   return (
@@ -187,30 +252,48 @@ export default function TwoFactorApp() {
             Autenticação 2FA
           </h1>
           
-          {/* Switch de Modo */}
-          <div className="flex items-center justify-center space-x-4 mb-6">
-            <span className={`text-sm font-medium ${mode === 'setup' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
-              Configurar 2FA
-            </span>
-            <button
-              onClick={toggleMode}
-              className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 dark:bg-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                  mode === 'generate' ? 'translate-x-6' : 'translate-x-1'
+          {/* Switch de Modo - 3 opções */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-xl p-1">
+              <button
+                onClick={() => changeMode('setup')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  mode === 'setup'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
-              />
-            </button>
-            <span className={`text-sm font-medium ${mode === 'generate' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
-              Gerar Códigos
-            </span>
+              >
+                Configurar
+              </button>
+              <button
+                onClick={() => changeMode('generate')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  mode === 'generate'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Gerar Códigos
+              </button>
+              <button
+                onClick={() => changeMode('import')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  mode === 'import'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Importar Google
+              </button>
+            </div>
           </div>
 
           <p className="text-lg text-slate-600 dark:text-slate-300">
             {mode === 'setup' 
               ? 'Configure a autenticação de dois fatores para sua conta'
-              : 'Gere códigos 2FA usando uma chave existente'
+              : mode === 'generate'
+              ? 'Gere códigos 2FA usando uma chave existente'
+              : 'Importe suas contas do Google Authenticator'
             }
           </p>
         </div>
@@ -476,6 +559,115 @@ export default function TwoFactorApp() {
                             Os códigos são gerados localmente em seu navegador. Sua chave secreta não é enviada para nossos servidores.
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Modo Import - Importar do Google Authenticator */}
+          {mode === 'import' && (
+            <div className="p-8 sm:p-12">
+              <div className="mb-8">
+                <div className="flex items-center mb-6">
+                  <div className="w-8 h-8 bg-yellow-500 text-white rounded-full flex items-center justify-center font-bold mr-4">📱</div>
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Importar do Google Authenticator</h2>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                  Cole a URL de migração do Google Authenticator para importar todas as suas contas de uma vez.
+                </p>
+                
+                <div className="space-y-6">
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      URL de Migração do Google Authenticator
+                    </label>
+                    <textarea
+                      value={migrationUrl}
+                      onChange={(e) => setMigrationUrl(e.target.value)}
+                      placeholder="otpauth-migration://offline?data=..."
+                      rows={4}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 outline-none resize-none"
+                      disabled={isImporting}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleImportMigration}
+                    disabled={isImporting || !migrationUrl.trim()}
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] disabled:transform-none flex items-center justify-center space-x-2"
+                  >
+                    {isImporting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <span>Importando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                        <span>Importar Contas</span>
+                      </>
+                    )}
+                  </button>
+
+                  {importError && (
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                      <p className="text-red-800 dark:text-red-200 font-medium">❌ {importError}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Lista de Contas Importadas */}
+              {importedAccounts.length > 0 && (
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-8">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">
+                    Contas Importadas ({importedAccounts.length})
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {importedAccounts.map((account, index) => (
+                      <div key={index} className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 border border-slate-200 dark:border-slate-600">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-slate-900 dark:text-white">
+                              {account.issuer} - {account.name}
+                            </div>
+                            <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                              {account.type} • {account.digits} dígitos • {account.algorithm}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-500 mt-1 font-mono">
+                              {account.secret.substring(0, 16)}...
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => selectImportedAccount(account)}
+                            className="ml-4 bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Usar</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start space-x-3">
+                      <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      <div>
+                        <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">Como obter a URL de migração</p>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                          No Google Authenticator: Toque nos 3 pontos → &quot;Transferir contas&quot; → &quot;Exportar contas&quot; → Selecione as contas → &quot;Avançar&quot; → Copie a URL do QR code.
+                        </p>
                       </div>
                     </div>
                   </div>

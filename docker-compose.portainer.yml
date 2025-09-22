@@ -24,7 +24,9 @@ services:
       rm -rf node_modules package-lock.json &&
       echo 'Instalando TODAS as dependências (prod + dev)...' &&
       npm install --include=dev &&
-      echo 'Construindo aplicação...' &&
+      echo 'Configurando Node.js para build em low-memory...' &&
+      export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=64' &&
+      echo 'Construindo aplicação com configuração de memória...' &&
       npm run build &&
       echo 'Removendo devDependencies para produção...' &&
       npm prune --production &&
@@ -34,6 +36,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=80
+      - NODE_OPTIONS=--max-old-space-size=768 --max-semi-space-size=64
+      - NEXT_TELEMETRY_DISABLED=1
     deploy:
       mode: replicated
       replicas: 1

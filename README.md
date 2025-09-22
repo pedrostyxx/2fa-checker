@@ -216,7 +216,184 @@ if (!/^\d{6}$/.test(cleanToken)) {
 - **Step**: Renovação a cada 30 segundos
 - **Algorithm**: SHA-1 (compatibilidade com apps existentes)
 
-### 🚀 Instalação e Uso
+### � Importação do Google Authenticator
+
+#### Como Funcionam os Códigos de Migração
+
+Os códigos de migração do Google Authenticator utilizam uma estrutura complexa para transferir múltiplas contas TOTP de forma segura. O processo envolve **codificação base64**, **Protocol Buffers** e **estruturas de dados binárias**.
+
+#### Estrutura da URL de Migração
+
+```
+otpauth-migration://offline?data=BASE64_ENCODED_DATA
+```
+
+**Exemplo real:**
+```
+otpauth-migration://offline?data=CjsKClP4LQGz02FHCBwSCnBlZHJvc3R5eHgaBkdpdEh1YiABKAEwAkITZmExYzk2MTY5MjM4NDkzNDM1MhACGAEgAA%3D%3D
+```
+
+#### Processo de Descriptografia
+
+##### 1. Decodificação Base64 URL-Safe
+```typescript
+// Decodificar o parâmetro 'data' da URL
+const base64Data = decodeURIComponent(urlParams.get('data'));
+const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+```
+
+##### 2. Estrutura Protocol Buffers
+
+O Google utiliza **Protocol Buffers (protobuf)** para serializar os dados. A estrutura é:
+
+```protobuf
+message MigrationPayload {
+  repeated OtpParameters otp_parameters = 1;
+  int32 version = 2;
+  int32 batch_size = 3;
+  int32 batch_index = 4;
+  int32 batch_id = 5;
+}
+
+message OtpParameters {
+  bytes secret = 1;
+  string name = 2;
+  string issuer = 3;
+  Algorithm algorithm = 4;
+  int32 digits = 5;
+  OtpType type = 6;
+  int64 counter = 7;
+}
+
+enum Algorithm {
+  ALGORITHM_UNSPECIFIED = 0;
+  ALGORITHM_SHA1 = 1;
+  ALGORITHM_SHA256 = 2;
+  ALGORITHM_SHA512 = 3;
+  ALGORITHM_MD5 = 4;
+}
+
+enum OtpType {
+  OTP_TYPE_UNSPECIFIED = 0;
+  OTP_TYPE_HOTP = 1;
+  OTP_TYPE_TOTP = 2;
+}
+```
+
+##### 3. Parser Protocol Buffers Customizado
+
+Nossa implementação inclui um **parser protobuf nativo** em JavaScript:
+
+```typescript
+function decodeGoogleMigrationData(data: Uint8Array): GoogleMigrationPayload {
+  const payload = { otp_parameters: [], version: 1, batch_size: 1, batch_index: 0, batch_id: 0 };
+  let offset = 0;
+
+  while (offset < data.length) {
+    const key = data[offset++];
+    const fieldNumber = key >> 3;  // Extrai número do campo
+    const wireType = key & 0x07;   // Extrai tipo de wire
+
+    if (fieldNumber === 1 && wireType === 2) { // otp_parameters (mensagem repetida)
+      const length = data[offset++];
+      const paramData = data.slice(offset, offset + length);
+      offset += length;
+      
+      const param = decodeOtpParameter(paramData);
+      payload.otp_parameters.push(param);
+    }
+    // ... outros campos
+  }
+  
+  return payload;
+}
+```
+
+##### 4. Conversão de Chaves Secretas
+
+As chaves secretas no Google são armazenadas como **bytes raw** e precisam ser convertidas para **base32**:
+
+```typescript
+function base32Encode(data: Uint8Array): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, value = 0, output = '';
+
+  for (let i = 0; i < data.length; i++) {
+    value = (value << 8) | data[i];
+    bits += 8;
+
+    while (bits >= 5) {
+      output += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    output += alphabet[(value << (5 - bits)) & 31];
+  }
+
+  // Adicionar padding RFC 4648
+  while (output.length % 8 !== 0) {
+    output += '=';
+  }
+
+  return output;
+}
+```
+
+#### Exemplo de Dados Decodificados
+
+**Entrada (base64):**
+```
+CjsKClP4LQGz02FHCBwSCnBlZHJvc3R5eHgaBkdpdEh1YiABKAEwAkITZmExYzk2MTY5MjM4NDkzNDM1MhACGAEgAA==
+```
+
+**Saída (estrutura decodificada):**
+```json
+{
+  "otp_parameters": [
+    {
+      "secret": [83, 248, 45, 1, 179, 211, 97, 71, 8, 28],
+      "name": "pedrostyxx",
+      "issuer": "GitHub",
+      "algorithm": 1,    // SHA1
+      "digits": 6,
+      "type": 2,         // TOTP
+      "counter": 0
+    }
+  ],
+  "version": 1,
+  "batch_size": 1,
+  "batch_index": 0,
+  "batch_id": 0
+}
+```
+
+**Chave base32 resultante:**
+```
+KP4C2QFTXURDDAIA
+```
+
+**URI OTPAuth final:**
+```
+otpauth://totp/GitHub:pedrostyxx?secret=KP4C2QFTXURDDAIA&issuer=GitHub&algorithm=SHA1&digits=6&period=30
+```
+
+#### Considerações de Segurança
+
+1. **Processamento Local**: Toda decodificação acontece no navegador
+2. **Sem Armazenamento**: Dados nunca são enviados para servidores externos
+3. **Descarte Imediato**: URLs são processadas e descartadas após uso
+4. **Validação Rigorosa**: Verificação de integridade dos dados protobuf
+
+#### Limitações Conhecidas
+
+- **Algoritmos Suportados**: SHA1, SHA256, SHA512
+- **Tipos Suportados**: Apenas TOTP (não HOTP)
+- **Codificação**: Base32 padrão RFC 4648
+- **Compatibilidade**: Google Authenticator v5.0+
+
+### �🚀 Instalação e Uso
 
 #### Pré-requisitos
 - Node.js 18+ 
@@ -484,7 +661,184 @@ if (!/^\d{6}$/.test(cleanToken)) {
 - **Step**: Renewal every 30 seconds
 - **Algorithm**: SHA-1 (compatibility with existing apps)
 
-### 🚀 Installation and Usage
+### � Google Authenticator Import
+
+#### How Migration Codes Work
+
+Google Authenticator migration codes use a complex structure to securely transfer multiple TOTP accounts. The process involves **base64 encoding**, **Protocol Buffers**, and **binary data structures**.
+
+#### Migration URL Structure
+
+```
+otpauth-migration://offline?data=BASE64_ENCODED_DATA
+```
+
+**Real example:**
+```
+otpauth-migration://offline?data=CjsKClP4LQGz02FHCBwSCnBlZHJvc3R5eHgaBkdpdEh1YiABKAEwAkITZmExYzk2MTY5MjM4NDkzNDM1MhACGAEgAA%3D%3D
+```
+
+#### Decryption Process
+
+##### 1. URL-Safe Base64 Decoding
+```typescript
+// Decode the 'data' parameter from URL
+const base64Data = decodeURIComponent(urlParams.get('data'));
+const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+```
+
+##### 2. Protocol Buffers Structure
+
+Google uses **Protocol Buffers (protobuf)** to serialize data. The structure is:
+
+```protobuf
+message MigrationPayload {
+  repeated OtpParameters otp_parameters = 1;
+  int32 version = 2;
+  int32 batch_size = 3;
+  int32 batch_index = 4;
+  int32 batch_id = 5;
+}
+
+message OtpParameters {
+  bytes secret = 1;
+  string name = 2;
+  string issuer = 3;
+  Algorithm algorithm = 4;
+  int32 digits = 5;
+  OtpType type = 6;
+  int64 counter = 7;
+}
+
+enum Algorithm {
+  ALGORITHM_UNSPECIFIED = 0;
+  ALGORITHM_SHA1 = 1;
+  ALGORITHM_SHA256 = 2;
+  ALGORITHM_SHA512 = 3;
+  ALGORITHM_MD5 = 4;
+}
+
+enum OtpType {
+  OTP_TYPE_UNSPECIFIED = 0;
+  OTP_TYPE_HOTP = 1;
+  OTP_TYPE_TOTP = 2;
+}
+```
+
+##### 3. Custom Protocol Buffers Parser
+
+Our implementation includes a **native protobuf parser** in JavaScript:
+
+```typescript
+function decodeGoogleMigrationData(data: Uint8Array): GoogleMigrationPayload {
+  const payload = { otp_parameters: [], version: 1, batch_size: 1, batch_index: 0, batch_id: 0 };
+  let offset = 0;
+
+  while (offset < data.length) {
+    const key = data[offset++];
+    const fieldNumber = key >> 3;  // Extract field number
+    const wireType = key & 0x07;   // Extract wire type
+
+    if (fieldNumber === 1 && wireType === 2) { // otp_parameters (repeated message)
+      const length = data[offset++];
+      const paramData = data.slice(offset, offset + length);
+      offset += length;
+      
+      const param = decodeOtpParameter(paramData);
+      payload.otp_parameters.push(param);
+    }
+    // ... other fields
+  }
+  
+  return payload;
+}
+```
+
+##### 4. Secret Key Conversion
+
+Secret keys in Google are stored as **raw bytes** and need to be converted to **base32**:
+
+```typescript
+function base32Encode(data: Uint8Array): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, value = 0, output = '';
+
+  for (let i = 0; i < data.length; i++) {
+    value = (value << 8) | data[i];
+    bits += 8;
+
+    while (bits >= 5) {
+      output += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    output += alphabet[(value << (5 - bits)) & 31];
+  }
+
+  // Add RFC 4648 padding
+  while (output.length % 8 !== 0) {
+    output += '=';
+  }
+
+  return output;
+}
+```
+
+#### Decoded Data Example
+
+**Input (base64):**
+```
+CjsKClP4LQGz02FHCBwSCnBlZHJvc3R5eHgaBkdpdEh1YiABKAEwAkITZmExYzk2MTY5MjM4NDkzNDM1MhACGAEgAA==
+```
+
+**Output (decoded structure):**
+```json
+{
+  "otp_parameters": [
+    {
+      "secret": [83, 248, 45, 1, 179, 211, 97, 71, 8, 28],
+      "name": "pedrostyxx",
+      "issuer": "GitHub",
+      "algorithm": 1,    // SHA1
+      "digits": 6,
+      "type": 2,         // TOTP
+      "counter": 0
+    }
+  ],
+  "version": 1,
+  "batch_size": 1,
+  "batch_index": 0,
+  "batch_id": 0
+}
+```
+
+**Resulting base32 key:**
+```
+KP4C2QFTXURDDAIA
+```
+
+**Final OTPAuth URI:**
+```
+otpauth://totp/GitHub:pedrostyxx?secret=KP4C2QFTXURDDAIA&issuer=GitHub&algorithm=SHA1&digits=6&period=30
+```
+
+#### Security Considerations
+
+1. **Local Processing**: All decoding happens in the browser
+2. **No Storage**: Data is never sent to external servers
+3. **Immediate Disposal**: URLs are processed and discarded after use
+4. **Strict Validation**: Protobuf data integrity verification
+
+#### Known Limitations
+
+- **Supported Algorithms**: SHA1, SHA256, SHA512
+- **Supported Types**: TOTP only (not HOTP)
+- **Encoding**: Standard base32 RFC 4648
+- **Compatibility**: Google Authenticator v5.0+
+
+### �🚀 Installation and Usage
 
 #### Prerequisites
 - Node.js 18+

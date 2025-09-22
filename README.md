@@ -216,7 +216,7 @@ if (!/^\d{6}$/.test(cleanToken)) {
 - **Step**: Renovação a cada 30 segundos
 - **Algorithm**: SHA-1 (compatibilidade com apps existentes)
 
-### � Importação do Google Authenticator
+### 🔐 Importação do Google Authenticator
 
 #### Como Funcionam os Códigos de Migração
 
